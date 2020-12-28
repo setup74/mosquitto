@@ -105,7 +105,7 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 
 
 	if(bridge == NULL) return MOSQ_ERR_INVAL;
-	if(direction != bd_out && direction != bd_in && direction != bd_both){
+	if(direction != bd_out && direction != bd_in && direction != bd_both && direction != bd_subs){
 		return MOSQ_ERR_INVAL;
 	}
 	if(qos > 2){
@@ -197,7 +197,7 @@ int bridge__remap_topic_in(struct mosquitto *context, char **topic)
 	if(context->bridge && context->bridge->topics && context->bridge->topic_remapping){
 		for(i=0; i<context->bridge->topic_count; i++){
 			cur_topic = &context->bridge->topics[i];
-			if((cur_topic->direction == bd_both || cur_topic->direction == bd_in)
+			if((cur_topic->direction == bd_both || cur_topic->direction == bd_in || cur_topic->direction == bd_subs)
 					&& (cur_topic->remote_prefix || cur_topic->local_prefix)){
 
 				/* Topic mapping required on this topic if the message matches */

@@ -476,7 +476,8 @@ struct mosquitto_db{
 enum mosquitto__bridge_direction{
 	bd_out = 0,
 	bd_in = 1,
-	bd_both = 2
+	bd_both = 2,
+	bd_subs = 3
 };
 
 enum mosquitto_bridge_start_type{

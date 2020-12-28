@@ -538,6 +538,22 @@ int bridge__on_connect(struct mosquitto *context)
 			if(send__subscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, sub_opts, NULL)){
 				return 1;
 			}
+		}else if(context->bridge->topics[i].direction == bd_subs){
+			/* TODO: subscribe all, matching this topic */
+			if(context->bridge->topics[i].qos > context->max_qos){
+				sub_opts = context->max_qos;
+			}else{
+				sub_opts = context->bridge->topics[i].qos;
+			}
+			if(context->bridge->protocol_version == mosq_p_mqtt5){
+				sub_opts = sub_opts
+					| MQTT_SUB_OPT_NO_LOCAL
+					| MQTT_SUB_OPT_RETAIN_AS_PUBLISHED
+					| MQTT_SUB_OPT_SEND_RETAIN_ALWAYS;
+			}
+			if(send__subscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, sub_opts, NULL)){
+				return 1;
+			}
 		}else{
 			if(context->bridge->attempt_unsubscribe){
 				if(send__unsubscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, NULL)){
