@@ -538,7 +538,7 @@ int bridge__on_connect(struct mosquitto *context)
 			if(send__subscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, sub_opts, NULL)){
 				return 1;
 			}
-		}else if(context->bridge->topics[i].direction == bd_subs){
+		}else if(context->bridge->topics[i].direction == bd_sub){
 			if(context->bridge->topics[i].qos > context->max_qos){
 				sub_opts = context->max_qos;
 			}else{

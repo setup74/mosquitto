@@ -2040,8 +2040,8 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, struct
 							direction = bd_in;
 						}else if(!strcasecmp(token, "both")){
 							direction = bd_both;
-						}else if(!strcasecmp(token, "subs")){
-							direction = bd_subs;
+						}else if(!strcasecmp(token, "sub")){
+							direction = bd_sub;
 						}else{
 							log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge topic direction '%s'.", token);
 							return MOSQ_ERR_INVAL;

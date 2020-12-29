@@ -105,7 +105,7 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 
 
 	if(bridge == NULL) return MOSQ_ERR_INVAL;
-	if(direction != bd_out && direction != bd_in && direction != bd_both && direction != bd_subs){
+	if(direction != bd_out && direction != bd_in && direction != bd_both && direction != bd_sub){
 		return MOSQ_ERR_INVAL;
 	}
 	if(qos > 2){
@@ -126,7 +126,7 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 		return MOSQ_ERR_INVAL;
 	}
 
-	/* TODO: NEED TO SPLIT topics into topics and subs_topics(for bd_subs only) */
+	/* TODO: NEED TO SPLIT topics into topics and sub_topics(for bd_sub only) */
 	bridge->topic_count++;
 	topics = mosquitto__realloc(bridge->topics,
 				sizeof(struct mosquitto__bridge_topic)*(size_t)bridge->topic_count);
@@ -142,8 +142,9 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 	cur_topic->qos = qos;
 	cur_topic->local_prefix = NULL;
 	cur_topic->remote_prefix = NULL;
-	cur_topic->subs_topics = NULL;
-	cur_topic->subs_local = NULL;
+	cur_topic->sub_match_topics = NULL;
+	cur_topic->sub_match_local = NULL;
+	cur_topic->sub_topics = NULL;
 
 	if(topic == NULL || !strcmp(topic, "\"\"")){
 		cur_topic->topic = NULL;
@@ -154,15 +155,15 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 			return MOSQ_ERR_NOMEM;
 		}
 
-		if(sub__topic_tokenise(topic, &cur_topic->subs_local, &cur_topic->subs_topics, NULL)) {
+		if(sub__topic_tokenise(topic, &cur_topic->sub_match_local, &cur_topic->sub_match_topics, NULL)) {
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
 			return MOSQ_ERR_NOMEM;
 		}
 	}
 
 	if(local_prefix || remote_prefix){
-		if(direction == bd_subs) {
-			log__printf(NULL, MOSQ_LOG_ERR, "Error: bridge topic subs SHOULD NOT define local_prefix nor remote_prefx.");
+		if(direction == bd_sub) {
+			log__printf(NULL, MOSQ_LOG_ERR, "Error: bridge topic sub SHOULD NOT define local_prefix nor remote_prefx.");
 			return MOSQ_ERR_INVAL;
 		}
 		bridge->topic_remapping = true;
@@ -208,7 +209,7 @@ int bridge__remap_topic_in(struct mosquitto *context, char **topic)
 	if(context->bridge && context->bridge->topics && context->bridge->topic_remapping){
 		for(i=0; i<context->bridge->topic_count; i++){
 			cur_topic = &context->bridge->topics[i];
-			if((cur_topic->direction == bd_both || cur_topic->direction == bd_in || cur_topic->direction == bd_subs)
+			if((cur_topic->direction == bd_both || cur_topic->direction == bd_in || cur_topic->direction == bd_sub)
 					&& (cur_topic->remote_prefix || cur_topic->local_prefix)){
 
 				/* Topic mapping required on this topic if the message matches */
@@ -255,14 +256,14 @@ int bridge__remap_topic_in(struct mosquitto *context, char **topic)
 	return MOSQ_ERR_SUCCESS;
 }
 
-/* subs topic add/remove for bridge topic direction "subs" */
+/* sub topic add/remove for bridge topic direction "sub" */
 
-int bridge__subs_add(struct mosquitto *context, char * const* const topic)
+int bridge__sub_add(struct mosquitto *context, char * const* const topic)
 {
 	return MOSQ_ERR_SUCCESS;
 }
 
-int bridge__subs_remove(struct mosquitto *context, char **topic)
+int bridge__sub_remove(struct mosquitto *context, char **topic)
 {
 	return MOSQ_ERR_SUCCESS;
 }

@@ -348,7 +348,7 @@ static int sub__add_context(struct mosquitto *context, uint8_t qos, uint32_t ide
 
 #ifdef WITH_BRIDGE
 	if(subhier->subs == NULL) {
-		bridge__subs_add(context, topics);
+		bridge__sub_add(context, topics);
 	}
 #endif
 
@@ -468,7 +468,7 @@ static int sub__remove_recurse(struct mosquitto *context, struct mosquitto__subh
 			mosquitto__free(branch->topic);
 			mosquitto__free(branch);
 #ifdef WITH_BRIDGE
-			bridge__subs_remove(context, topics_org);
+			bridge__sub_remove(context, topics_org);
 #endif
 		}
 	}

@@ -477,7 +477,7 @@ enum mosquitto__bridge_direction{
 	bd_out = 0,
 	bd_in = 1,
 	bd_both = 2,
-	bd_subs = 3
+	bd_sub = 3
 };
 
 enum mosquitto_bridge_start_type{
@@ -485,6 +485,12 @@ enum mosquitto_bridge_start_type{
 	bst_lazy = 1,
 	bst_manual = 2,
 	bst_once = 3
+};
+
+struct mosquitto__bridge_sub{
+	struct mosquitto__bridge_sub *prev;
+	struct mosquitto__bridge_sub *next;
+	char *topic;
 };
 
 struct mosquitto__bridge_topic{
@@ -495,8 +501,9 @@ struct mosquitto__bridge_topic{
 	char *remote_topic; /* topic prefixed with remote_prefix */
 	enum mosquitto__bridge_direction direction;
 	uint8_t qos;
-	char **subs_topics; /* for bd_subs matching */
-	char *subs_local; /* for bd_subs matching; topics string buf */
+	char **sub_match_topics; /* for bd_sub matching against subscribe topic */
+	char *sub_match_local; /* for bd_sub matching; topics string buf */
+	struct mosquitto__bridge_sub *sub_topics;
 };
 
 struct bridge_address{
@@ -729,8 +736,8 @@ void bridge_check(void);
 int bridge__register_local_connections(void);
 int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum mosquitto__bridge_direction direction, uint8_t qos, const char *local_prefix, const char *remote_prefix);
 int bridge__remap_topic_in(struct mosquitto *context, char **topic);
-int bridge__subs_add(struct mosquitto *context, char * const* const topic);
-int bridge__subs_remove(struct mosquitto *context, char **topic);
+int bridge__sub_add(struct mosquitto *context, char * const* const topic);
+int bridge__sub_remove(struct mosquitto *context, char **topic);
 #endif
 
 /* ============================================================
