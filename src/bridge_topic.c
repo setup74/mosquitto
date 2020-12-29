@@ -127,17 +127,32 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 	}
 
 	/* TODO: NEED TO SPLIT topics into topics and sub_topics(for bd_sub only) */
-	bridge->topic_count++;
-	topics = mosquitto__realloc(bridge->topics,
-				sizeof(struct mosquitto__bridge_topic)*(size_t)bridge->topic_count);
+	if(direction == bd_sub) {
+		bridge->sub_topic_count++;
+		topics = mosquitto__realloc(bridge->sub_topics,
+					sizeof(struct mosquitto__bridge_topic)*(size_t)bridge->sub_topic_count);
 
-	if(topics == NULL){
-		log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-		return MOSQ_ERR_NOMEM;
+		if(topics == NULL){
+			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
+			return MOSQ_ERR_NOMEM;
+		}
+		bridge->sub_topics = topics;
+
+		cur_topic = &bridge->sub_topics[bridge->sub_topic_count-1];
+	}else{
+		bridge->topic_count++;
+		topics = mosquitto__realloc(bridge->topics,
+					sizeof(struct mosquitto__bridge_topic)*(size_t)bridge->topic_count);
+
+		if(topics == NULL){
+			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
+			return MOSQ_ERR_NOMEM;
+		}
+		bridge->topics = topics;
+
+		cur_topic = &bridge->topics[bridge->topic_count-1];
 	}
-	bridge->topics = topics;
 
-	cur_topic = &bridge->topics[bridge->topic_count-1];
 	cur_topic->direction = direction;
 	cur_topic->qos = qos;
 	cur_topic->local_prefix = NULL;
@@ -206,10 +221,12 @@ int bridge__remap_topic_in(struct mosquitto *context, char **topic)
 	int rc;
 	bool match;
 
+	/* NOTE: no packet remap with bd_sub */
+
 	if(context->bridge && context->bridge->topics && context->bridge->topic_remapping){
 		for(i=0; i<context->bridge->topic_count; i++){
 			cur_topic = &context->bridge->topics[i];
-			if((cur_topic->direction == bd_both || cur_topic->direction == bd_in || cur_topic->direction == bd_sub)
+			if((cur_topic->direction == bd_both || cur_topic->direction == bd_in)
 					&& (cur_topic->remote_prefix || cur_topic->local_prefix)){
 
 				/* Topic mapping required on this topic if the message matches */

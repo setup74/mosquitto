@@ -483,6 +483,7 @@ int bridge__on_connect(struct mosquitto *context)
 	int sub_opts;
 	bool retain = true;
 	uint8_t qos;
+	struct mosquitto__bridge_sub *sub_topic;
 
 	if(context->bridge->notifications){
 		if(context->max_qos == 0){
@@ -538,22 +539,6 @@ int bridge__on_connect(struct mosquitto *context)
 			if(send__subscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, sub_opts, NULL)){
 				return 1;
 			}
-		}else if(context->bridge->topics[i].direction == bd_sub){
-			if(context->bridge->topics[i].qos > context->max_qos){
-				sub_opts = context->max_qos;
-			}else{
-				sub_opts = context->bridge->topics[i].qos;
-			}
-			if(context->bridge->protocol_version == mosq_p_mqtt5){
-				sub_opts = sub_opts
-					| MQTT_SUB_OPT_NO_LOCAL
-					| MQTT_SUB_OPT_RETAIN_AS_PUBLISHED
-					| MQTT_SUB_OPT_SEND_RETAIN_ALWAYS;
-			}
-			/* TODO: subscribe all, matching this topic */
-			if(send__subscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, sub_opts, NULL)){
-				return 1;
-			}
 		}else{
 			if(context->bridge->attempt_unsubscribe){
 				if(send__unsubscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, NULL)){
@@ -575,6 +560,28 @@ int bridge__on_connect(struct mosquitto *context)
 			retain__queue(context,
 					context->bridge->topics[i].local_topic,
 					qos, 0);
+		}
+	}
+	for(i=0; i<context->bridge->sub_topic_count; i++){
+		if(context->bridge->sub_topics[i].direction == bd_sub){
+			if(context->bridge->sub_topics[i].qos > context->max_qos){
+				sub_opts = context->max_qos;
+			}else{
+				sub_opts = context->bridge->sub_topics[i].qos;
+			}
+			if(context->bridge->protocol_version == mosq_p_mqtt5){
+				sub_opts = sub_opts
+					| MQTT_SUB_OPT_NO_LOCAL
+					| MQTT_SUB_OPT_RETAIN_AS_PUBLISHED
+					| MQTT_SUB_OPT_SEND_RETAIN_ALWAYS;
+			}
+			sub_topic = context->bridge->sub_topics[i].sub_topics;
+			while (sub_topic != NULL) {
+				if(send__subscribe(context, NULL, 1, &sub_topic->topic, sub_opts, NULL)){
+					return 1;
+				}
+				sub_topic = sub_topic->next;
+			}
 		}
 	}
 

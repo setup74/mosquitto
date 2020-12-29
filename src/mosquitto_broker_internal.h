@@ -526,6 +526,8 @@ struct mosquitto__bridge{
 	uint16_t keepalive;
 	struct mosquitto__bridge_topic *topics;
 	int topic_count;
+	struct mosquitto__bridge_topic *sub_topics;
+	int sub_topic_count;
 	bool topic_remapping;
 	enum mosquitto__protocol protocol_version;
 	time_t restart_t;
