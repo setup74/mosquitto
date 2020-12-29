@@ -346,6 +346,12 @@ static int sub__add_context(struct mosquitto *context, uint8_t qos, uint32_t ide
 		topic_index++;
 	}
 
+#ifdef WITH_BRIDGE
+	if(subhier->subs == NULL) {
+		bridge__subs_add(context, topics);
+	}
+#endif
+
 	/* Add add our context */
 	if(context && context->id){
 		if(sharename){
@@ -442,7 +448,7 @@ static int sub__remove_shared(struct mosquitto *context, struct mosquitto__subhi
 }
 
 
-static int sub__remove_recurse(struct mosquitto *context, struct mosquitto__subhier *subhier, char **topics, uint8_t *reason, const char *sharename)
+static int sub__remove_recurse(struct mosquitto *context, struct mosquitto__subhier *subhier, char **topics, uint8_t *reason, const char *sharename, char **topics_org)
 {
 	struct mosquitto__subhier *branch;
 
@@ -456,11 +462,14 @@ static int sub__remove_recurse(struct mosquitto *context, struct mosquitto__subh
 
 	HASH_FIND(hh, subhier->children, topics[0], strlen(topics[0]), branch);
 	if(branch){
-		sub__remove_recurse(context, branch, &(topics[1]), reason, sharename);
+		sub__remove_recurse(context, branch, &(topics[1]), reason, sharename, topics_org);
 		if(!branch->children && !branch->subs && !branch->shared){
 			HASH_DELETE(hh, subhier->children, branch);
 			mosquitto__free(branch->topic);
 			mosquitto__free(branch);
+#ifdef WITH_BRIDGE
+			bridge__subs_remove(context, topics_org);
+#endif
 		}
 	}
 	return MOSQ_ERR_SUCCESS;
@@ -624,7 +633,7 @@ int sub__remove(struct mosquitto *context, const char *sub, struct mosquitto__su
 	HASH_FIND(hh, root, topics[0], strlen(topics[0]), subhier);
 	if(subhier){
 		*reason = MQTT_RC_NO_SUBSCRIPTION_EXISTED;
-		rc = sub__remove_recurse(context, subhier, topics, reason, sharename);
+		rc = sub__remove_recurse(context, subhier, topics, reason, sharename, topics);
 	}
 
 	mosquitto__free(local_sub);

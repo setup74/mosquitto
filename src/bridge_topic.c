@@ -126,7 +126,7 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 		return MOSQ_ERR_INVAL;
 	}
 
-
+	/* TODO: NEED TO SPLIT topics into topics and subs_topics(for bd_subs only) */
 	bridge->topic_count++;
 	topics = mosquitto__realloc(bridge->topics,
 				sizeof(struct mosquitto__bridge_topic)*(size_t)bridge->topic_count);
@@ -142,6 +142,8 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 	cur_topic->qos = qos;
 	cur_topic->local_prefix = NULL;
 	cur_topic->remote_prefix = NULL;
+	cur_topic->subs_topics = NULL;
+	cur_topic->subs_local = NULL;
 
 	if(topic == NULL || !strcmp(topic, "\"\"")){
 		cur_topic->topic = NULL;
@@ -151,9 +153,18 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
 			return MOSQ_ERR_NOMEM;
 		}
+
+		if(sub__topic_tokenise(topic, &cur_topic->subs_local, &cur_topic->subs_topics, NULL)) {
+			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
+			return MOSQ_ERR_NOMEM;
+		}
 	}
 
 	if(local_prefix || remote_prefix){
+		if(direction == bd_subs) {
+			log__printf(NULL, MOSQ_LOG_ERR, "Error: bridge topic subs SHOULD NOT define local_prefix nor remote_prefx.");
+			return MOSQ_ERR_INVAL;
+		}
 		bridge->topic_remapping = true;
 		if(local_prefix){
 			if(bridge__create_prefix(&cur_topic->local_prefix, cur_topic->topic, local_prefix, "local")){
@@ -241,6 +252,18 @@ int bridge__remap_topic_in(struct mosquitto *context, char **topic)
 		}
 	}
 
+	return MOSQ_ERR_SUCCESS;
+}
+
+/* subs topic add/remove for bridge topic direction "subs" */
+
+int bridge__subs_add(struct mosquitto *context, char * const* const topic)
+{
+	return MOSQ_ERR_SUCCESS;
+}
+
+int bridge__subs_remove(struct mosquitto *context, char **topic)
+{
 	return MOSQ_ERR_SUCCESS;
 }
 

@@ -539,7 +539,6 @@ int bridge__on_connect(struct mosquitto *context)
 				return 1;
 			}
 		}else if(context->bridge->topics[i].direction == bd_subs){
-			/* TODO: subscribe all, matching this topic */
 			if(context->bridge->topics[i].qos > context->max_qos){
 				sub_opts = context->max_qos;
 			}else{
@@ -551,6 +550,7 @@ int bridge__on_connect(struct mosquitto *context)
 					| MQTT_SUB_OPT_RETAIN_AS_PUBLISHED
 					| MQTT_SUB_OPT_SEND_RETAIN_ALWAYS;
 			}
+			/* TODO: subscribe all, matching this topic */
 			if(send__subscribe(context, NULL, 1, &context->bridge->topics[i].remote_topic, sub_opts, NULL)){
 				return 1;
 			}
