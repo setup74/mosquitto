@@ -126,8 +126,7 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 		return MOSQ_ERR_INVAL;
 	}
 
-	/* TODO: NEED TO SPLIT topics into topics and sub_topics(for bd_sub only) */
-	if(direction == bd_sub) {
+	if(direction == bd_sub){
 		bridge->sub_topic_count++;
 		topics = mosquitto__realloc(bridge->sub_topics,
 					sizeof(struct mosquitto__bridge_topic)*(size_t)bridge->sub_topic_count);
@@ -159,7 +158,7 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 	cur_topic->remote_prefix = NULL;
 	cur_topic->sub_match_topics = NULL;
 	cur_topic->sub_match_local = NULL;
-	cur_topic->sub_topics = NULL;
+	cur_topic->sub_list = NULL;
 
 	if(topic == NULL || !strcmp(topic, "\"\"")){
 		cur_topic->topic = NULL;
@@ -177,7 +176,7 @@ int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum 
 	}
 
 	if(local_prefix || remote_prefix){
-		if(direction == bd_sub) {
+		if(direction == bd_sub){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: bridge topic sub SHOULD NOT define local_prefix nor remote_prefx.");
 			return MOSQ_ERR_INVAL;
 		}
@@ -275,14 +274,169 @@ int bridge__remap_topic_in(struct mosquitto *context, char **topic)
 
 /* sub topic add/remove for bridge topic direction "sub" */
 
-int bridge__sub_add(struct mosquitto *context, char * const* const topic)
+char *bridge__sub_topics_str(char * const* const topics)
 {
+	int i;
+	size_t len;
+	char *topic;
+
+	len = 1;
+	for(i=0;topics[i];i++){
+		len += strlen(topics[i]) + 1;
+	}
+
+	topic = malloc(len);
+	if(topic == NULL){
+		return NULL;
+	}
+
+	len = 0;
+	for(i=0;topics[i];i++) {
+		if(i > 1){
+			topic[len] = '/';
+			len++;
+		}
+		strcpy(&topic[len], topics[i]);
+		len += strlen(topics[i]);
+	}
+	topic[len] = '\0';
+
+	return topic;
+}
+
+int bridge__sub_list_add_topic(struct mosquitto__bridge *bridge, struct mosquitto__bridge_topic *bridge_topic, char * const* const topics)
+{
+	struct mosquitto__bridge_sub *sub;
+
+	sub = malloc(sizeof(struct mosquitto__bridge_sub));
+	if(sub == NULL){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
+		return MOSQ_ERR_NOMEM;
+	}
+	sub->topic = bridge__sub_topics_str(topics);
+	if(sub->topic == NULL){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
+		mosquitto__free(sub);
+		return MOSQ_ERR_NOMEM;
+	}
+
+	// TODO: check sub.topic is NOT in bridge_topic.sub_topics
+	
+	if(bridge_topic->sub_list){
+		sub->prev = bridge_topic->sub_list->prev;
+		sub->next = bridge_topic->sub_list->next;
+		bridge_topic->sub_list->prev = sub;
+	}else{
+		sub->prev = sub;
+		sub->next = NULL;
+		bridge_topic->sub_list = sub;
+	}
+
+	// TODO: send subscribe(sub.topic) message to bridge
+
+	// TODO: remove DEBUG log
+	log__printf(NULL, MOSQ_LOG_ERR, "DEBUG: Add to bridge sub_list: %s", sub->topic);
+	
 	return MOSQ_ERR_SUCCESS;
 }
 
-int bridge__sub_remove(struct mosquitto *context, char **topic)
+int bridge__sub_list_remove_topic(struct mosquitto__bridge *bridge, struct mosquitto__bridge_topic *bridge_topic, char * const* const topics)
 {
+	char *topic;
+	struct mosquitto__bridge_sub *sub;
+
+	topic = bridge__sub_topics_str(topics);
+	if(topic == NULL){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
+		return MOSQ_ERR_NOMEM;
+	}
+
+	if(bridge_topic->sub_list == NULL){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Not found in bridge_topic.sub_list to remove: %s", topic);
+		mosquitto__free(topic);
+		return MOSQ_ERR_NOMEM;
+	}
+
+	for(sub=bridge_topic->sub_list; sub; sub=sub->next){
+		if(!strcmp(sub->topic, topic)){
+			break;
+		}
+	}
+	if(sub == NULL){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Not found in bridge_topic.sub_list to remove: %s", topic);
+		mosquitto__free(topic);
+		return MOSQ_ERR_NOMEM;
+	}
+	
+	sub->prev->next = sub->next;
+	if(sub->next){
+		sub->next->prev = sub->prev;
+	}
+	if(sub == bridge_topic->sub_list){
+		bridge_topic->sub_list = NULL;
+	}
+
+	// TODO: send unsubscribe(bridge_sub.topic) message to bridge
+
+	// TODO: remove DEBUG log
+	log__printf(NULL, MOSQ_LOG_ERR, "DEBUG Remove from bridge sub_list: %s", topic);
+	mosquitto__free(topic);
 	return MOSQ_ERR_SUCCESS;
+}
+
+int bridge__sub_add(struct mosquitto *context, char * const* const topics)
+{
+	// TODO SHOULD SCAN ALL BRIDGES
+
+	int i, j, k, rc;
+	struct mosquitto__bridge *bridge;
+	struct mosquitto__bridge_topic *bridge_topic;
+	char *topic;
+
+	for(i=0; i<db.bridge_count; i++){
+		bridge = db.bridges[i]->bridge;
+		for(j=0; j<bridge->sub_topic_count; j++) {
+			bridge_topic = &bridge->sub_topics[j];
+			for(k=0; (topic = bridge_topic->sub_match_topics[k]); k++){
+				if(topics[k] != NULL){
+					if(!strcmp(topic, topics[k]) || !strcmp(topic, "+")) {
+						continue;
+					}else if(!strcmp(topic, "#")) {
+						break;
+					}
+				}
+				break;
+			}
+			if(k >= 1 && ((topic == NULL && topics[k] == NULL) || (!strcmp(topic, "#") && topics[k] != NULL))){
+				rc = bridge__sub_list_add_topic(context->bridge, bridge_topic, topics);
+				if(rc){
+					return rc;
+				}
+				break;
+			}
+		}
+	}
+
+	return MOSQ_ERR_NOT_FOUND;
+}
+
+int bridge__sub_remove(struct mosquitto *context, char * const* const topics)
+{
+	int i, j;
+	struct mosquitto__bridge_topic *bridge_topic;
+
+	for(i=0; i<context->bridge->sub_topic_count; i++){
+		bridge_topic = &context->bridge->sub_topics[i];
+		for(j=0; bridge_topic->sub_match_topics[j] && topics[j]; j++){
+			if(strcmp(bridge_topic->sub_match_topics[j], topics[j]) && strcmp(bridge_topic->sub_match_topics[j], "+")){
+				break;
+			}
+		}
+		if(bridge_topic->sub_match_topics[j] == NULL || strcmp(bridge_topic->sub_match_topics[j], "#")){
+			return bridge__sub_list_remove_topic(context->bridge, bridge_topic, topics);
+		}
+	}
+	return MOSQ_ERR_NOT_FOUND;
 }
 
 #endif

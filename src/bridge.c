@@ -483,7 +483,7 @@ int bridge__on_connect(struct mosquitto *context)
 	int sub_opts;
 	bool retain = true;
 	uint8_t qos;
-	struct mosquitto__bridge_sub *sub_topic;
+	struct mosquitto__bridge_sub *sub;
 
 	if(context->bridge->notifications){
 		if(context->max_qos == 0){
@@ -575,12 +575,12 @@ int bridge__on_connect(struct mosquitto *context)
 					| MQTT_SUB_OPT_RETAIN_AS_PUBLISHED
 					| MQTT_SUB_OPT_SEND_RETAIN_ALWAYS;
 			}
-			sub_topic = context->bridge->sub_topics[i].sub_topics;
-			while (sub_topic != NULL) {
-				if(send__subscribe(context, NULL, 1, &sub_topic->topic, sub_opts, NULL)){
+			sub = context->bridge->sub_topics[i].sub_list;
+			while (sub != NULL){
+				if(send__subscribe(context, NULL, 1, &sub->topic, sub_opts, NULL)){
 					return 1;
 				}
-				sub_topic = sub_topic->next;
+				sub = sub->next;
 			}
 		}
 	}

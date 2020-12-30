@@ -503,7 +503,7 @@ struct mosquitto__bridge_topic{
 	uint8_t qos;
 	char **sub_match_topics; /* for bd_sub matching against subscribe topic */
 	char *sub_match_local; /* for bd_sub matching; topics string buf */
-	struct mosquitto__bridge_sub *sub_topics;
+	struct mosquitto__bridge_sub *sub_list;
 };
 
 struct bridge_address{
@@ -739,7 +739,7 @@ int bridge__register_local_connections(void);
 int bridge__add_topic(struct mosquitto__bridge *bridge, const char *topic, enum mosquitto__bridge_direction direction, uint8_t qos, const char *local_prefix, const char *remote_prefix);
 int bridge__remap_topic_in(struct mosquitto *context, char **topic);
 int bridge__sub_add(struct mosquitto *context, char * const* const topic);
-int bridge__sub_remove(struct mosquitto *context, char **topic);
+int bridge__sub_remove(struct mosquitto *context, char * const* const topic);
 #endif
 
 /* ============================================================

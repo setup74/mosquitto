@@ -347,7 +347,7 @@ static int sub__add_context(struct mosquitto *context, uint8_t qos, uint32_t ide
 	}
 
 #ifdef WITH_BRIDGE
-	if(subhier->subs == NULL) {
+	if(subhier->subs == NULL){
 		bridge__sub_add(context, topics);
 	}
 #endif
