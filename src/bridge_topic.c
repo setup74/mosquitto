@@ -18,9 +18,11 @@ Contributors:
 
 #include "config.h"
 
+#include "mqtt_protocol.h"
 #include "mosquitto.h"
 #include "mosquitto_broker_internal.h"
 #include "memory_mosq.h"
+#include "send_mosq.h"
 
 #ifdef WITH_BRIDGE
 static int bridge__create_remap_topic(const char *prefix, const char *topic, char **remap_topic)
@@ -304,9 +306,10 @@ char *bridge__sub_topics_str(char * const* const topics)
 	return topic;
 }
 
-int bridge__sub_list_add_topic(struct mosquitto__bridge *bridge, struct mosquitto__bridge_topic *bridge_topic, char * const* const topics)
+int bridge__sub_list_add_topic(struct mosquitto *context, struct mosquitto__bridge_topic *bridge_topic, char * const* const topics)
 {
 	struct mosquitto__bridge_sub *sub;
+	int sub_opts;
 
 	sub = malloc(sizeof(struct mosquitto__bridge_sub));
 	if(sub == NULL){
@@ -321,7 +324,6 @@ int bridge__sub_list_add_topic(struct mosquitto__bridge *bridge, struct mosquitt
 	}
 
 	// TODO: check sub.topic is NOT in bridge_topic.sub_topics
-	
 	if(bridge_topic->sub_list){
 		sub->prev = bridge_topic->sub_list->prev;
 		sub->next = bridge_topic->sub_list->next;
@@ -332,15 +334,28 @@ int bridge__sub_list_add_topic(struct mosquitto__bridge *bridge, struct mosquitt
 		bridge_topic->sub_list = sub;
 	}
 
-	// TODO: send subscribe(sub.topic) message to bridge
-
 	// TODO: remove DEBUG log
 	log__printf(NULL, MOSQ_LOG_ERR, "DEBUG: Add to bridge sub_list: %s", sub->topic);
+
+	if(bridge_topic->qos > context->max_qos){
+		sub_opts = context->max_qos;
+	}else{
+		sub_opts = bridge_topic->qos;
+	}
+	if(context->bridge->protocol_version == mosq_p_mqtt5){
+		sub_opts = sub_opts
+			| MQTT_SUB_OPT_NO_LOCAL
+			| MQTT_SUB_OPT_RETAIN_AS_PUBLISHED
+			| MQTT_SUB_OPT_SEND_RETAIN_ALWAYS;
+	}
+	if(send__subscribe(context, NULL, 1, &sub->topic, sub_opts, NULL)){
+		return 1;
+	}
 	
 	return MOSQ_ERR_SUCCESS;
 }
 
-int bridge__sub_list_remove_topic(struct mosquitto__bridge *bridge, struct mosquitto__bridge_topic *bridge_topic, char * const* const topics)
+int bridge__sub_list_remove_topic(struct mosquitto *context, struct mosquitto__bridge_topic *bridge_topic, char * const* const topics)
 {
 	char *topic;
 	struct mosquitto__bridge_sub *sub;
@@ -376,39 +391,37 @@ int bridge__sub_list_remove_topic(struct mosquitto__bridge *bridge, struct mosqu
 		bridge_topic->sub_list = NULL;
 	}
 
-	// TODO: send unsubscribe(bridge_sub.topic) message to bridge
-
 	// TODO: remove DEBUG log
 	log__printf(NULL, MOSQ_LOG_ERR, "DEBUG Remove from bridge sub_list: %s", topic);
+
+	if(send__unsubscribe(context, NULL, 1, &topic, NULL)){
+		return 1;
+	}
+
 	mosquitto__free(topic);
 	return MOSQ_ERR_SUCCESS;
 }
 
-int bridge__sub_add(struct mosquitto *context, char * const* const topics)
+int bridge__sub_add(struct mosquitto *_context, char * const* const topics)
 {
 	// TODO SHOULD SCAN ALL BRIDGES
 
 	int i, j, k, rc;
-	struct mosquitto__bridge *bridge;
+	struct mosquitto *context;
 	struct mosquitto__bridge_topic *bridge_topic;
 	char *topic;
 
 	for(i=0; i<db.bridge_count; i++){
-		bridge = db.bridges[i]->bridge;
-		for(j=0; j<bridge->sub_topic_count; j++) {
-			bridge_topic = &bridge->sub_topics[j];
-			for(k=0; (topic = bridge_topic->sub_match_topics[k]); k++){
-				if(topics[k] != NULL){
-					if(!strcmp(topic, topics[k]) || !strcmp(topic, "+")) {
-						continue;
-					}else if(!strcmp(topic, "#")) {
-						break;
-					}
+		context = db.bridges[i];
+		for(j=0; j<context->bridge->sub_topic_count; j++) {
+			bridge_topic = &context->bridge->sub_topics[j];
+			for(k=0; (topic = bridge_topic->sub_match_topics[k]) && topics[k]; k++){
+				if((strcmp(topic, topics[k]) && strcmp(topic, "+")) || !strcmp(topic, "#")){
+					break;
 				}
-				break;
 			}
 			if(k >= 1 && ((topic == NULL && topics[k] == NULL) || (!strcmp(topic, "#") && topics[k] != NULL))){
-				rc = bridge__sub_list_add_topic(context->bridge, bridge_topic, topics);
+				rc = bridge__sub_list_add_topic(context, bridge_topic, topics);
 				if(rc){
 					return rc;
 				}
@@ -420,20 +433,29 @@ int bridge__sub_add(struct mosquitto *context, char * const* const topics)
 	return MOSQ_ERR_NOT_FOUND;
 }
 
-int bridge__sub_remove(struct mosquitto *context, char * const* const topics)
+int bridge__sub_remove(struct mosquitto *_context, char * const* const topics)
 {
-	int i, j;
+	int i, j, k, rc;
+	struct mosquitto *context;
 	struct mosquitto__bridge_topic *bridge_topic;
+	char *topic;
 
-	for(i=0; i<context->bridge->sub_topic_count; i++){
-		bridge_topic = &context->bridge->sub_topics[i];
-		for(j=0; bridge_topic->sub_match_topics[j] && topics[j]; j++){
-			if(strcmp(bridge_topic->sub_match_topics[j], topics[j]) && strcmp(bridge_topic->sub_match_topics[j], "+")){
+	for(i=0; i<db.bridge_count; i++){
+		context = db.bridges[i];
+		for(j=0; j<context->bridge->sub_topic_count; j++) {
+			bridge_topic = &context->bridge->sub_topics[j];
+			for(k=0; (topic = bridge_topic->sub_match_topics[k]) && topics[k]; k++){
+				if((strcmp(topic, topics[k]) && strcmp(topic, "+")) || !strcmp(topic, "#")){
+					break;
+				}
+			}
+			if(k >= 1 && ((topic == NULL && topics[k] == NULL) || (!strcmp(topic, "#") && topics[k] != NULL))){
+				rc = bridge__sub_list_remove_topic(context, bridge_topic, topics);
+				if(rc){
+					return rc;
+				}
 				break;
 			}
-		}
-		if(bridge_topic->sub_match_topics[j] == NULL || strcmp(bridge_topic->sub_match_topics[j], "#")){
-			return bridge__sub_list_remove_topic(context->bridge, bridge_topic, topics);
 		}
 	}
 	return MOSQ_ERR_NOT_FOUND;
